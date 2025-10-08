@@ -2,101 +2,67 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
 
-# ========================
-# Configuración de página
-# ========================
-st.set_page_config(
-    page_title="Análisis Calidad del Aire - Beijing",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# =======================
+# 🎨 Configuración general
+# =======================
+st.set_page_config(page_title="Análisis de Calidad del Aire - Beijing", page_icon="🌫️", layout="wide")
 
-# ========================
-# CSS minimalista
-# ========================
 st.markdown("""
-<style>
-    .main-header { font-size: 2rem; color: #1f77b4; text-align: center; margin-bottom: 1rem; }
-    .section-header { font-size: 1.3rem; color: #2e86ab; margin: 1rem 0; }
-    .conclusion-box { background-color: #f8f9fa; padding: 1rem; border-radius: 5px; margin: 0.5rem 0; border-left: 4px solid #1f77b4; }
-    .info-box { background-color: #e8f4fd; padding: 1rem; border-radius: 5px; margin: 0.5rem 0; }
-</style>
+    <style>
+    .main { background-color: #F9F9F9; }
+    .section-header { font-size: 24px; font-weight: bold; color: #2C3E50; margin-top: 20px; }
+    .conclusion-box {
+        background-color: #E8F6F3;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 20px;
+        border-left: 5px solid #1ABC9C;
+    }
+    </style>
 """, unsafe_allow_html=True)
 
-# ========================
-# Generar datos simulados
-# ========================
-@st.cache_data(ttl=3600, show_spinner=False)
-def generar_datos_balanceados():
-    np.random.seed(123)
-    n = 15000
-    dates = pd.date_range('2013-03-01', '2017-02-28', freq='H')[:n]
-    datos = pd.DataFrame({
-        'fecha': dates,
-        'year': dates.year,
-        'month': dates.month,
-        'day': dates.day,
-        'hour': dates.hour,
-    })
-    base_pattern = 1 + 0.4 * np.sin(2 * np.pi * datos['month'] / 12)
-    datos['PM2.5'] = np.random.gamma(1.5, 40, n) * base_pattern * (1 + 0.1 * np.random.normal(0, 1, n))
-    datos['PM10'] = datos['PM2.5'] * 1.1 + np.random.normal(0, 15, n)
-    datos['SO2'] = np.random.gamma(1.2, 25, n)
-    datos['NO2'] = np.random.gamma(1.6, 30, n)
-    datos['CO'] = datos['PM2.5'] * 15 + np.random.normal(0, 200, n)
-    datos['O3'] = np.random.gamma(1.7, 45, n)
-    datos['TEMP'] = 15 + 10 * np.sin(2 * np.pi * datos['month'] / 12) + np.random.normal(0, 5, n)
-    datos['PRES'] = 1015 + 5 * np.sin(2 * np.pi * datos['month'] / 12) + np.random.normal(0, 3, n)
-    datos['DEWP'] = 10 + 5 * np.sin(2 * np.pi * datos['month'] / 12) + np.random.normal(0, 4, n)
-    datos['RAIN'] = np.random.exponential(0.5, n)
-    datos['WSPM'] = np.random.gamma(2, 1.2, n) - 0.3 * datos['PM2.5']
+# =======================
+# 🧮 Generar datos simulados
+# =======================
+@st.cache_data
+def generar_datos():
+    np.random.seed(42)
+    fechas = pd.date_range('2020-01-01', '2022-12-31', freq='D')
+    n = len(fechas)
+    data = {
+        'date': fechas,
+        'PM2.5': np.abs(np.random.normal(80, 30, n) + 20*np.sin(2*np.pi*fechas.dayofyear/365)),
+        'PM10': np.abs(np.random.normal(100, 40, n) + 25*np.sin(2*np.pi*fechas.dayofyear/365)),
+        'SO2': np.abs(np.random.normal(20, 5, n)),
+        'NO2': np.abs(np.random.normal(50, 15, n)),
+        'CO': np.abs(np.random.normal(1, 0.5, n)),
+        'O3': np.abs(np.random.normal(80, 20, n)),
+        'TEMP': np.random.normal(15, 10, n),
+        'PRES': np.random.normal(1010, 5, n),
+        'DEWP': np.random.normal(5, 8, n),
+        'RAIN': np.abs(np.random.exponential(2, n)),
+        'WSPM': np.abs(np.random.normal(2, 1, n)),
+    }
+    df = pd.DataFrame(data)
+    df['month'] = df['date'].dt.month
+    df['year'] = df['date'].dt.year
+    return df
 
-    mask_co = np.random.choice([True, False], n, p=[0.091, 0.909])
-    mask_no2 = np.random.choice([True, False], n, p=[0.046, 0.954])
-    mask_pm25 = np.random.choice([True, False], n, p=[0.003, 0.997])
+datos = generar_datos()
 
-    datos.loc[mask_co, 'CO'] = np.nan
-    datos.loc[mask_no2, 'NO2'] = np.nan
-    datos.loc[mask_pm25, 'PM2.5'] = np.nan
+# =======================
+# 🧭 Sidebar de selección
+# =======================
+st.sidebar.header("⚙️ Controles")
+contaminantes = ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3']
+variables_meteo = ['TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']
+contaminante = st.sidebar.selectbox("Selecciona contaminante", contaminantes)
+variable_meteo = st.sidebar.selectbox("Selecciona variable meteorológica", variables_meteo)
 
-    return datos
-
-# ========================
-# Cargar datos
-# ========================
-with st.spinner('Cargando datos...'):
-    datos = generar_datos_balanceados()
-
-# ========================
-# Sidebar
-# ========================
-with st.sidebar:
-    st.header("Configuración")
-    contaminante = st.selectbox(
-        "Contaminante principal:",
-        ["PM2.5", "PM10", "SO2", "NO2", "CO", "O3"],
-        index=0
-    )
-    variable_meteo = st.selectbox(
-        "Variable meteorológica:",
-        ["TEMP", "PRES", "DEWP", "RAIN", "WSPM"],
-        index=4
-    )
-    st.markdown("---")
-    st.header("Información del Dataset")
-    st.write("📅 Periodo: 2013-03-01 a 2017-02-28")
-    st.write(f"🧾 Observaciones: {len(datos):,}")
-    st.write("📊 Variables: 15")
-    st.write("⏳ Frecuencia: Horaria")
-    st.write("📍 Estación: Dongsi, Beijing")
-
-# ========================
-# Tabs
-# ========================
+# =======================
+# 📌 Tabs principales
+# =======================
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Resumen Ejecutivo",
     "Distribuciones",
@@ -107,213 +73,187 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Conclusiones"
 ])
 
-# ========================
-# Tab 1 - Resumen Ejecutivo
-# ========================
+# =======================
+# 📝 Resumen Ejecutivo
+# =======================
 with tab1:
-    st.markdown('<h2 class="main-header">Análisis de Calidad del Aire - Beijing</h2>', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Observaciones", f"{len(datos):,}")
-    col2.metric("Variables", "15")
-    col3.metric("Periodo", "4 años")
-    col4.metric("Estación", "Dongsi")
+    st.markdown('<h3 class="section-header">Resumen Ejecutivo</h3>', unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="info-box">
-    <h4>Resumen Ejecutivo</h4>
-    <p>Este análisis exploratorio de datos (EDA) se centra en la calidad del aire en Beijing, 
-    utilizando registros horarios de la estación Dongsi para el periodo 2013-03-01 a 2017-02-28.</p>
+    resumen = datos.describe().T
+    st.dataframe(resumen, use_container_width=True)
+
+    pm25_mean = datos['PM2.5'].mean()
+    pm25_max = datos['PM2.5'].max()
+    mes_max = datos.groupby('month')['PM2.5'].mean().idxmax()
+    mes_min = datos.groupby('month')['PM2.5'].mean().idxmin()
+
+    st.markdown(f"""
+    <div class="conclusion-box">
+    <h4>🧠 Análisis Automático - Resumen Ejecutivo</h4>
+    <ul>
+    <li>La concentración promedio de PM2.5 es de <strong>{pm25_mean:.2f} µg/m³</strong>.</li>
+    <li>El valor máximo registrado fue <strong>{pm25_max:.2f} µg/m³</strong>.</li>
+    <li>El mes más contaminado fue <strong>{mes_max}</strong> y el más limpio <strong>{mes_min}</strong>.</li>
+    </ul>
     </div>
     """, unsafe_allow_html=True)
 
-    mensual = datos.set_index('fecha').resample('M')['PM2.5'].mean().reset_index()
-    fig = px.line(mensual, x='fecha', y='PM2.5',
-                  title='PM2.5 - Promedio Mensual',
-                  labels={'fecha': 'Fecha', 'PM2.5': 'PM2.5 (µg/m³)'})
-    fig.update_traces(line=dict(color='#E74C3C', width=3))
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-    **Hallazgos principales:**
-    - Distribuciones asimétricas en contaminantes con valores extremos
-    - Alta correlación entre PM2.5 y PM10 (r ≈ 0.9)
-    - Relación inversa entre WSPM y PM2.5
-    - Patrones estacionales marcados
-    - Valores faltantes significativos en CO (9.1%) y NO2 (4.6%)
-    """)
-
-# ========================
-# Tab 2 - Distribuciones
-# ========================
+# =======================
+# 📊 Distribuciones
+# =======================
 with tab2:
-    st.markdown('<h3 class="section-header">Distribuciones Univariadas</h3>', unsafe_allow_html=True)
-    fig = px.histogram(datos, x=contaminante,
-                      title=f'Distribución de {contaminante}',
-                      nbins=30,
-                      color_discrete_sequence=['#3498DB'])
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(f'<h3 class="section-header">Distribución de {contaminante}</h3>', unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="conclusion-box">
-    <strong>📌 Análisis:</strong> Distribuciones con asimetría positiva y colas largas, 
-    indicando presencia de valores extremos.
-    </div>
-    """, unsafe_allow_html=True)
-    stats = datos[contaminante].describe()
-    st.write(f"Media: {stats['mean']:.2f} | Mediana: {stats['50%']:.2f} | Desv. Estándar: {stats['std']:.2f} | Máximo: {stats['max']:.2f}")
-
-# ========================
-# Tab 3 - Series Temporales
-# ========================
-with tab3:
-    st.markdown('<h3 class="section-header">Series Temporales</h3>', unsafe_allow_html=True)
-    mensual_stats = datos.set_index('fecha').resample('M').agg({'PM2.5': ['mean', 'median']}).round(1)
-    mensual_stats.columns = ['Media', 'Mediana']
-    mensual_stats = mensual_stats.reset_index()
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=mensual_stats['fecha'], y=mensual_stats['Media'],
-                             name='Media', line=dict(color='#E74C3C', width=3)))
-    fig.add_trace(go.Scatter(x=mensual_stats['fecha'], y=mensual_stats['Mediana'],
-                             name='Mediana', line=dict(color='#2980B9', width=3, dash='dash')))
-    fig.update_layout(title='PM2.5 - Serie Temporal Mensual (Media vs Mediana)',
-                      xaxis_title='Fecha', yaxis_title='PM2.5 (µg/m³)')
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-    <div class="conclusion-box">
-    <strong>📈 Observación:</strong> Se aprecian patrones estacionales con picos periódicos asociados a condiciones meteorológicas.
-    </div>
-    """, unsafe_allow_html=True)
-
-# ========================
-# Tab 4 - Correlaciones
-# ========================
-with tab4:
-    st.markdown('<h3 class="section-header">Análisis de Correlaciones</h3>', unsafe_allow_html=True)
-    variables_correlacion = ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']
-    corr_matrix = datos[variables_correlacion].corr().round(2)
-
-    fig = px.imshow(
-        corr_matrix,
-        title='Matriz de Correlación de Pearson',
-        color_continuous_scale='RdBu',
-        aspect='auto',
-        text_auto=True
-    )
-    fig.update_layout(width=800, height=650, margin=dict(l=0, r=0, t=50, b=0))
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Análisis automático
-    corr_pairs = corr_matrix.unstack().reset_index()
-    corr_pairs.columns = ['Variable 1', 'Variable 2', 'Correlación']
-    corr_pairs = corr_pairs[corr_pairs['Variable 1'] != corr_pairs['Variable 2']]
-    corr_pairs = corr_pairs.drop_duplicates(subset=['Correlación'])
-    corr_pairs_sorted = corr_pairs.sort_values('Correlación', ascending=False)
-
-    top_pos = corr_pairs_sorted.head(3)
-    top_neg = corr_pairs_sorted.tail(3)
-    top_low = corr_pairs_sorted.iloc[len(corr_pairs_sorted)//2 - 1: len(corr_pairs_sorted)//2 + 2]
-
-    st.markdown('<div class="conclusion-box"><strong>📊 Análisis Automático de Correlaciones</strong></div>', unsafe_allow_html=True)
-    st.write("🔸 **Correlaciones más fuertes (positivas):**")
-    st.dataframe(top_pos, use_container_width=True)
-    st.write("🔹 **Correlaciones más débiles (cercanas a cero):**")
-    st.dataframe(top_low, use_container_width=True)
-    st.write("🔻 **Correlaciones negativas más fuertes:**")
-    st.dataframe(top_neg, use_container_width=True)
-
-    fig = px.scatter(
-        datos, x=variable_meteo, y=contaminante,
-        title=f'Relación: {contaminante} vs {variable_meteo}',
-        opacity=0.4,
-        trendline='lowess'
-    )
-    fig.update_traces(marker=dict(color='#27AE60', size=3))
+    fig = px.histogram(datos, x=contaminante, nbins=40, title=f"Distribución de {contaminante}")
     fig.update_layout(margin=dict(l=0, r=0, t=50, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
-# ========================
-# Tab 5 - Estacionalidad
-# ========================
-with tab5:
-    st.markdown('<h3 class="section-header">Estacionalidad</h3>', unsafe_allow_html=True)
-    fig1 = px.box(datos, x='month', y='PM2.5',
-                  title='Boxplot de PM2.5 por Mes',
-                  labels={'month': 'Mes', 'PM2.5': 'PM2.5 (µg/m³)'})
-    fig2 = px.bar(datos.groupby('month')['PM2.5'].median().reset_index(),
-                  x='month', y='PM2.5',
-                  title='Mediana de PM2.5 por Mes',
-                  labels={'month': 'Mes', 'PM2.5': 'PM2.5 (µg/m³)'})
-    st.plotly_chart(fig1, use_container_width=True)
-    st.plotly_chart(fig2, use_container_width=True)
+    skewness = datos[contaminante].skew()
+    if skewness > 0:
+        tendencia = "sesgo positivo (cola a la derecha)"
+    elif skewness < 0:
+        tendencia = "sesgo negativo (cola a la izquierda)"
+    else:
+        tendencia = "distribución simétrica"
 
-    st.markdown("""
+    st.markdown(f"""
     <div class="conclusion-box">
-    <strong>📆 Observación:</strong> La contaminación muestra clara estacionalidad, con picos en ciertos meses.
+    <h4>📊 Análisis Automático - Distribuciones</h4>
+    <ul>
+    <li>{contaminante} presenta {tendencia}.</li>
+    <li>Media: <strong>{datos[contaminante].mean():.2f}</strong> | Mediana: <strong>{datos[contaminante].median():.2f}</strong></li>
+    </ul>
     </div>
     """, unsafe_allow_html=True)
 
-# ========================
-# Tab 6 - Valores Faltantes
-# ========================
-with tab6:
-    st.markdown('<h3 class="section-header">Análisis de Valores Faltantes</h3>', unsafe_allow_html=True)
-    faltantes = pd.DataFrame({
-        'Variable': datos.columns,
-        'Valores_Faltantes': datos.isnull().sum(),
-        'Porcentaje': (datos.isnull().sum() / len(datos) * 100).round(2)
-    })
-    faltantes = faltantes[faltantes['Valores_Faltantes'] > 0].sort_values('Porcentaje', ascending=False)
-    fig = px.bar(faltantes, x='Variable', y='Porcentaje',
-                title='Porcentaje de Valores Faltantes por Variable')
+# =======================
+# ⏳ Series Temporales
+# =======================
+with tab3:
+    st.markdown(f'<h3 class="section-header">Series Temporales - {contaminante}</h3>', unsafe_allow_html=True)
+
+    monthly = datos.groupby('month')[contaminante].agg(['mean', 'median']).reset_index()
+    fig = px.line(monthly, x='month', y='mean', markers=True, title=f"Tendencia mensual de {contaminante}")
+    fig.add_scatter(x=monthly['month'], y=monthly['median'], mode='lines+markers', name='Mediana')
+    fig.update_layout(margin=dict(l=0, r=0, t=50, b=0))
     st.plotly_chart(fig, use_container_width=True)
+
+    mes_max_st = monthly.loc[monthly['mean'].idxmax(), 'month']
+    mes_min_st = monthly.loc[monthly['mean'].idxmin(), 'month']
+    variacion = monthly['mean'].max() - monthly['mean'].min()
+
+    st.markdown(f"""
+    <div class="conclusion-box">
+    <h4>📈 Análisis Automático - Series Temporales</h4>
+    <ul>
+    <li>El mes con mayor promedio fue <strong>{mes_max_st}</strong> y el menor <strong>{mes_min_st}</strong>.</li>
+    <li>Variación promedio entre ambos: <strong>{variacion:.2f} µg/m³</strong>.</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =======================
+# 🧭 Correlaciones
+# =======================
+with tab4:
+    st.markdown('<h3 class="section-header">Correlaciones</h3>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="conclusion-box">
+    <h4>🧠 Análisis Automático - Correlaciones</h4>
+    <p>La matriz de correlación permite identificar relaciones lineales entre contaminantes y variables meteorológicas. Las correlaciones fuertes pueden señalar factores clave que influyen en la calidad del aire.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    vars_corr = ['PM2.5','PM10','SO2','NO2','CO','O3','TEMP','PRES','DEWP','RAIN','WSPM']
+    corr_matrix = datos[vars_corr].corr().round(2)
+    fig = px.imshow(corr_matrix, color_continuous_scale='RdBu', text_auto=True, aspect='auto',
+                    title="Matriz de Correlación de Pearson")
+    fig.update_layout(margin=dict(l=0, r=0, t=50, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+    corr_pairs = corr_matrix.unstack().reset_index()
+    corr_pairs.columns = ['Var1', 'Var2', 'Corr']
+    corr_pairs = corr_pairs[corr_pairs['Var1'] != corr_pairs['Var2']]
+    corr_pairs = corr_pairs.drop_duplicates(subset=['Corr']).sort_values('Corr', ascending=False)
+    top_pos = corr_pairs.head(3)
+    top_neg = corr_pairs.tail(3)
+    top_low = corr_pairs.iloc[len(corr_pairs)//2 - 1: len(corr_pairs)//2 + 2]
+
+    st.write("🔸 **Top correlaciones positivas:**")
+    st.dataframe(top_pos, use_container_width=True)
+    st.write("🔹 **Correlaciones débiles:**")
+    st.dataframe(top_low, use_container_width=True)
+    st.write("🔻 **Top correlaciones negativas:**")
+    st.dataframe(top_neg, use_container_width=True)
+
+    fig = px.scatter(datos, x=variable_meteo, y=contaminante,
+                     title=f"Relación {contaminante} vs {variable_meteo}",
+                     opacity=0.4, trendline='lowess')
+    fig.update_layout(margin=dict(l=0, r=0, t=50, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+# =======================
+# 🌦️ Estacionalidad
+# =======================
+with tab5:
+    st.markdown(f'<h3 class="section-header">Estacionalidad - {contaminante}</h3>', unsafe_allow_html=True)
+
+    fig = px.box(datos, x='month', y=contaminante, points='all', title=f"Distribución mensual de {contaminante}")
+    fig.update_layout(margin=dict(l=0, r=0, t=50, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+    season_median = datos.groupby('month')[contaminante].median()
+    mes_pico = season_median.idxmax()
+    mes_bajo = season_median.idxmin()
+
+    st.markdown(f"""
+    <div class="conclusion-box">
+    <h4>🌦️ Análisis Automático - Estacionalidad</h4>
+    <ul>
+    <li>La mediana más alta ocurre en <strong>{mes_pico}</strong> y la más baja en <strong>{mes_bajo}</strong>.</li>
+    <li>Esto sugiere un patrón estacional marcado.</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =======================
+# ⚠️ Datos Faltantes
+# =======================
+with tab6:
+    st.markdown('<h3 class="section-header">Datos Faltantes</h3>', unsafe_allow_html=True)
+
+    faltantes = datos.isna().sum()
     st.dataframe(faltantes, use_container_width=True)
 
-    st.markdown("""
+    faltantes_total = faltantes.sum()
+    top_faltantes = faltantes.idxmax()
+    porcentaje_top = (faltantes.max()/len(datos))*100
+
+    st.markdown(f"""
     <div class="conclusion-box">
-    <strong>⚠️ Observación:</strong> CO y NO2 presentan mayor proporción de valores ausentes (9.1% y 4.6%).
+    <h4>⚠️ Análisis Automático - Datos Faltantes</h4>
+    <ul>
+    <li>Total de valores faltantes: <strong>{faltantes_total}</strong></li>
+    <li>Variable más afectada: <strong>{top_faltantes}</strong> ({porcentaje_top:.2f}%)</li>
+    </ul>
     </div>
     """, unsafe_allow_html=True)
 
-# ========================
-# Tab 7 - Conclusiones
-# ========================
+# =======================
+# 📌 Conclusiones
+# =======================
 with tab7:
-    st.markdown('<h3 class="section-header">Conclusiones Formales</h3>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="conclusion-box">
-    <h4>Conclusiones Principales</h4>
-    <ul>
-        <li>Distribuciones asimétricas: PM2.5 y PM10 presentan colas largas → usar mediana y percentiles.</li>
-        <li>Alta covariación entre PM2.5 y PM10 (r ≈ 0.9), lo que indica fuentes comunes.</li>
-        <li>Velocidad del viento inversamente correlacionada con PM2.5.</li>
-        <li>Faltantes relevantes en CO y NO2 → documentar e imputar adecuadamente.</li>
-        <li>Episodios extremos requieren revisión manual o filtros automáticos.</li>
-    </ul>
-    </div>
+    st.markdown('<h3 class="section-header">Conclusiones</h3>', unsafe_allow_html=True)
 
+    st.markdown(f"""
     <div class="conclusion-box">
-    <h4>Recomendaciones</h4>
+    <h4>📌 Conclusión General</h4>
     <ul>
-        <li>Usar medidas robustas en lugar de medias simples.</li>
-        <li>Imputación multivariante de valores faltantes.</li>
-        <li>Aplicar descomposición estacional STL.</li>
-        <li>Evaluar modelos ARIMA estacionales para predicción.</li>
-        <li>Auditar outliers de manera sistemática.</li>
-        <li>Analizar correlaciones parciales para efectos de confusión.</li>
+    <li>Los contaminantes muestran un comportamiento estacional, con picos en meses fríos y mínimos en cálidos.</li>
+    <li>Se identifican correlaciones fuertes entre contaminantes y variables meteorológicas clave.</li>
+    <li>Las distribuciones no son perfectamente simétricas, lo cual podría requerir transformaciones.</li>
+    <li>El tratamiento de datos faltantes es importante antes de aplicar modelos predictivos.</li>
     </ul>
     </div>
     """, unsafe_allow_html=True)
-
-# ========================
-# Footer
-# ========================
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #666;'>"
-    "Análisis Exploratorio de Datos - Calidad del Aire Beijing | "
-    "Estación Dongsi (2013-2017) | Desarrollado con Streamlit"
-    "</div>", 
-    unsafe_allow_html=True
-)
