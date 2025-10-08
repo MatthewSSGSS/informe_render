@@ -115,13 +115,23 @@ def classify_missing_type(col_name, df_obj):
     p = df_obj[col_name].isna().mean()
     if p == 0:
         return "Sin faltantes"
-    # correlation between missing indicator and numeric variables
-    indicator = df_obj[col_name].isna().astype(int)
-    numeric = df_obj.select_dtypes(include=[np.number]).drop(columns=[col_name], errors=True)
+    
+    # Obtener columnas numéricas excluyendo la columna actual si es numérica
+    numeric = df_obj.select_dtypes(include=[np.number])
+    
+    # Si la columna actual es numérica, excluirla del análisis de correlación
+    if col_name in numeric.columns:
+        numeric = numeric.drop(columns=[col_name])
+    
+    # Si no hay columnas numéricas restantes, usar heurística simple
     if numeric.shape[1] == 0:
         return "MCAR" if p < 0.2 else "MNAR"
-    cors = numeric.apply(lambda x: indicator.corr(x))
+    
+    # Calcular correlación entre indicador de missing y otras variables numéricas
+    indicator = df_obj[col_name].isna().astype(int)
+    cors = numeric.apply(lambda x: indicator.corr(x) if x.notna().any() else np.nan)
     max_abs_corr = cors.abs().max(skipna=True)
+    
     if pd.isna(max_abs_corr):
         return "MCAR"
     if max_abs_corr > 0.3:
