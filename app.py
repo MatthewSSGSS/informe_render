@@ -13,12 +13,31 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS minimalista
+# CSS para ELIMINAR tooltips y mostrar análisis
 st.markdown("""
 <style>
     .main-header { font-size: 2rem; color: #1f77b4; text-align: center; margin-bottom: 1rem; }
     .section-header { font-size: 1.3rem; color: #2e86ab; margin: 1rem 0; }
-    .analysis-box { background-color: #f0f8ff; padding: 1rem; border-radius: 5px; margin: 1rem 0; border-left: 4px solid #1f77b4; }
+    .analysis-box { 
+        background-color: #f0f8ff; 
+        padding: 1.5rem; 
+        border-radius: 8px; 
+        margin: 1rem 0; 
+        border-left: 5px solid #1f77b4;
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+    
+    /* ELIMINAR COMPLETAMENTE los tooltips de Plotly */
+    .js-plotly-plot .plotly .hoverlayer,
+    .js-plotly-plot .plotly .hover-container,
+    .plotly-notifier,
+    .hoverlayer,
+    .scrollbox {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,10 +130,13 @@ with tab1:
     # Serie temporal principal
     mensual = datos.set_index('fecha').resample('M')['PM2.5'].mean().reset_index()
     fig = px.line(mensual, x='fecha', y='PM2.5', 
-                  title='PM2.5 - Promedio Mensual',
-                  labels={'fecha': 'Fecha', 'PM2.5': 'PM2.5 (µg/m³)'})
-    fig.update_traces(line=dict(color='#E74C3C', width=3), hoverinfo='skip')
-    fig.update_layout(hovermode=False)
+                  title='PM2.5 - Promedio Mensual')
+    fig.update_traces(line=dict(color='#E74C3C', width=3))
+    fig.update_layout(
+        xaxis_title='Fecha', 
+        yaxis_title='PM2.5 (µg/m³)',
+        hovermode=False
+    )
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
@@ -137,7 +159,6 @@ with tab2:
                           title=f'Distribucion de {contaminante}',
                           nbins=30,
                           color_discrete_sequence=['#3498DB'])
-        fig.update_traces(hoverinfo='skip')
         fig.update_layout(hovermode=False)
         st.plotly_chart(fig, use_container_width=True)
     
@@ -169,13 +190,15 @@ with tab3:
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=mensual_stats['fecha'], y=mensual_stats['Media'], 
-                            name='Media', line=dict(color='#E74C3C', width=3), hoverinfo='skip'))
+                            name='Media', line=dict(color='#E74C3C', width=3)))
     fig.add_trace(go.Scatter(x=mensual_stats['fecha'], y=mensual_stats['Mediana'], 
-                            name='Mediana', line=dict(color='#2980B9', width=3, dash='dash'), hoverinfo='skip'))
-    fig.update_layout(title='PM2.5 - Serie Temporal Mensual (Media vs Mediana)',
-                     xaxis_title='Fecha', 
-                     yaxis_title='PM2.5 (µg/m³)',
-                     hovermode=False)
+                            name='Mediana', line=dict(color='#2980B9', width=3, dash='dash')))
+    fig.update_layout(
+        title='PM2.5 - Serie Temporal Mensual (Media vs Mediana)',
+        xaxis_title='Fecha', 
+        yaxis_title='PM2.5 (µg/m³)',
+        hovermode=False
+    )
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -200,7 +223,6 @@ with tab4:
                    aspect='auto',
                    text_auto=True)
     fig.update_layout(hovermode=False)
-    fig.update_traces(hoverinfo='skip')
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
@@ -222,7 +244,6 @@ with tab5:
         fig = px.box(datos, x='month', y='PM2.5',
                     title='Boxplot de PM2.5 por Mes',
                     labels={'month': 'Mes', 'PM2.5': 'PM2.5 (µg/m³)'})
-        fig.update_traces(hoverinfo='skip')
         fig.update_layout(hovermode=False)
         st.plotly_chart(fig, use_container_width=True)
     
@@ -231,7 +252,6 @@ with tab5:
         fig = px.bar(mediana_mensual, x='month', y='PM2.5',
                     title='Mediana de PM2.5 por Mes',
                     labels={'month': 'Mes', 'PM2.5': 'PM2.5 (µg/m³)'})
-        fig.update_traces(hoverinfo='skip')
         fig.update_layout(hovermode=False)
         st.plotly_chart(fig, use_container_width=True)
     
@@ -260,7 +280,6 @@ with tab6:
         fig = px.bar(faltantes, x='Variable', y='Porcentaje',
                     title='Porcentaje de Valores Faltantes por Variable',
                     labels={'Variable': 'Variable', 'Porcentaje': 'Porcentaje (%)'})
-        fig.update_traces(hoverinfo='skip')
         fig.update_layout(hovermode=False)
         st.plotly_chart(fig, use_container_width=True)
     
