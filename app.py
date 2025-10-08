@@ -5,173 +5,176 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.impute import SimpleImputer
 
-# Configuración de la página
-st.set_page_config(page_title="Análisis EDA - Contaminación PRSA", layout="wide")
+# ==============================
+# CONFIGURACIÓN DE LA PÁGINA
+# ==============================
+st.set_page_config(page_title="Análisis de Calidad del Aire - Beijing", page_icon="🌫️", layout="wide")
 
-# Estilo general oscuro
+# ==============================
+# CSS PERSONALIZADO (letras blancas)
+# ==============================
 st.markdown("""
-<style>
-body {
-    background-color: #121212;
-    color: #FFFFFF;
-}
-h1, h2, h3, h4 {
-    color: #00BFFF;
-}
-.analysis-box {
-    background-color: rgba(0, 0, 0, 0.6);
-    color: #FFFFFF;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-}
-</style>
+    <style>
+    body, .stMarkdown, .stText, div, p {
+        color: white !important;
+    }
+    .block-container {
+        background-color: #0e1117;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #1e222b;
+    }
+    </style>
 """, unsafe_allow_html=True)
 
-# --- Cargar datos ---
+# ==============================
+# CARGA DE DATOS
+# ==============================
 @st.cache_data
-def load_data():
+def cargar_datos():
     df = pd.read_csv("PRSA_Data_Dongsi_20130301-20170228.csv")
+    df["datetime"] = pd.to_datetime(df[["year", "month", "day", "hour"]])
+    df = df.drop(columns=["No"])
     return df
 
-df = load_data()
-st.title("🌍 Análisis Exploratorio del Dataset PRSA - Contaminación y Clima")
+df = cargar_datos()
 
-# --- Tabs principales ---
-tabs = st.tabs(["Resumen Ejecutivo", "Distribuciones", "Series Temporales",
-                "Correlaciones", "Estacionalidad", "Datos Faltantes", "Análisis Bivariado", "Conclusiones"])
+# ==============================
+# VARIABLES DISPONIBLES
+# ==============================
+contaminantes = ["PM2.5"]
+variables_meteo = ["DEWP", "TEMP", "PRES", "Iws", "Is", "Ir"]
 
-# --- Resumen Ejecutivo ---
+# ==============================
+# SIDEBAR
+# ==============================
+st.sidebar.header("Opciones de Análisis")
+var1 = st.sidebar.selectbox("Variable 1", contaminantes + variables_meteo)
+var2 = st.sidebar.selectbox("Variable 2 (para análisis bivariado)", contaminantes + variables_meteo)
+
+# ==============================
+# PESTAÑAS
+# ==============================
+tabs = st.tabs([
+    "📊 Resumen Ejecutivo",
+    "📈 Distribuciones",
+    "🔗 Correlaciones",
+    "📅 Estacionalidad",
+    "🚨 Datos Faltantes",
+    "🔀 Análisis Bivariado",
+    "📝 Conclusiones"
+])
+
+# ==============================
+# RESUMEN EJECUTIVO
+# ==============================
 with tabs[0]:
-    st.header("📊 Resumen Ejecutivo")
-    st.write(df.describe())
-    st.markdown("""
-    <div class="analysis-box">
-    Este análisis explora los niveles de contaminación (PM2.5, PM10) y sus posibles relaciones con variables
-    meteorológicas como temperatura, humedad, presión, punto de rocío y velocidad del viento.
-    </div>
-    """, unsafe_allow_html=True)
+    st.subheader("📊 Resumen Ejecutivo")
 
-    st.subheader("Distribución General de PM2.5")
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.histplot(df["PM2.5"], kde=True, color="skyblue", ax=ax)
-    st.pyplot(fig)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Promedio PM2.5", f"{df['PM2.5'].mean():.2f} µg/m³")
+    col2.metric("Promedio TEMP", f"{df['TEMP'].mean():.2f} °C")
+    col3.metric("Promedio PRES", f"{df['PRES'].mean():.2f} hPa")
 
-# --- Distribuciones ---
-with tabs[1]:
-    st.header("📈 Distribuciones de Variables Meteorológicas")
-    variables = ["TEMP", "PRES", "DEWP", "HUMI", "WSPM"]
-    for var in variables:
-        st.subheader(f"Distribución de {var}")
-        fig, ax = plt.subplots(figsize=(7, 3))
-        sns.histplot(df[var], kde=True, color="orange", ax=ax)
-        st.pyplot(fig)
-    st.markdown("""
-    <div class="analysis-box">
-    Las variables meteorológicas muestran patrones distintos de dispersión y concentración.
-    Por ejemplo, la temperatura y la humedad presentan una relación inversa a lo largo del año.
-    </div>
-    """, unsafe_allow_html=True)
+    df_mensual = df.groupby(df["datetime"].dt.to_period("M")).mean(numeric_only=True)
+    df_mensual.index = df_mensual.index.to_timestamp()
 
-# --- Series Temporales ---
-with tabs[2]:
-    st.header("⏱️ Series Temporales")
-    if "year" not in df.columns:
-        df["date"] = pd.to_datetime(df[["year", "month", "day", "hour"]])
-    df_ts = df.set_index("date")
-
-    st.subheader("Evolución de PM2.5 a lo largo del tiempo")
     fig, ax = plt.subplots(figsize=(10, 4))
-    df_ts["PM2.5"].plot(ax=ax, color="cyan")
-    ax.set_ylabel("PM2.5")
+    ax.plot(df_mensual.index, df_mensual["PM2.5"], label="PM2.5", color="orange")
+    ax.set_title("Evolución mensual del PM2.5", color="white")
+    ax.legend()
     st.pyplot(fig)
 
-# --- Correlaciones ---
-with tabs[3]:
-    st.header("🔗 Matriz de Correlación")
-    numeric_df = df.select_dtypes(include=[np.number])
-    corr = numeric_df.corr()
+# ==============================
+# DISTRIBUCIONES
+# ==============================
+with tabs[1]:
+    st.subheader("📈 Distribuciones de Variables")
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    col1, col2 = st.columns(2)
+    with col1:
+        fig, ax = plt.subplots()
+        sns.histplot(df[var1], kde=True, color="orange", ax=ax)
+        ax.set_title(f"Distribución de {var1}", color="white")
+        st.pyplot(fig)
+    with col2:
+        fig, ax = plt.subplots()
+        sns.histplot(df[var2], kde=True, color="skyblue", ax=ax)
+        ax.set_title(f"Distribución de {var2}", color="white")
+        st.pyplot(fig)
+
+# ==============================
+# CORRELACIONES
+# ==============================
+with tabs[2]:
+    st.subheader("🔗 Matriz de Correlación")
+
+    corr = df[["PM2.5", "DEWP", "TEMP", "PRES", "Iws", "Is", "Ir"]].corr()
+    fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+    ax.set_title("Matriz de Correlación", color="white")
     st.pyplot(fig)
 
-    st.markdown("""
-    <div class="analysis-box">
-    Se observa una alta correlación entre PM2.5 y PM10, lo que indica comportamientos similares en la concentración
-    de contaminantes. Las variables meteorológicas muestran correlaciones moderadas con la contaminación, 
-    sugiriendo influencia ambiental.
-    </div>
-    """, unsafe_allow_html=True)
+# ==============================
+# ESTACIONALIDAD
+# ==============================
+with tabs[3]:
+    st.subheader("📅 Estacionalidad Mensual")
 
-# --- Estacionalidad ---
+    df["month"] = df["datetime"].dt.month
+    fig, ax = plt.subplots(figsize=(8, 5))
+    sns.boxplot(data=df, x="month", y=var1, color="orange", ax=ax)
+    ax.set_title(f"Estacionalidad de {var1} por mes", color="white")
+    st.pyplot(fig)
+
+# ==============================
+# DATOS FALTANTES
+# ==============================
 with tabs[4]:
-    st.header("🌦️ Estacionalidad de los Contaminantes")
-    df["month_name"] = df["month"].map({
-        1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
-        7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"
-    })
-    mean_month = df.groupby("month_name")[["PM2.5","PM10"]].mean()
+    st.subheader("🚨 Datos Faltantes")
 
-    fig, ax = plt.subplots(figsize=(8,4))
-    mean_month.plot(kind="bar", ax=ax, color=["cyan","orange"])
-    ax.set_ylabel("Concentración promedio")
-    st.pyplot(fig)
+    st.write("**Antes de Imputación:**")
+    faltantes_inicial = df.isna().mean() * 100
+    st.bar_chart(faltantes_inicial)
 
-    st.markdown("""
-    <div class="analysis-box">
-    Se observa mayor concentración de contaminantes durante los meses fríos, lo que coincide con 
-    un aumento en el uso de calefacción y menor dispersión atmosférica.
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- Datos Faltantes ---
-with tabs[5]:
-    st.header("🚧 Análisis de Datos Faltantes")
-    st.subheader("Antes de imputar")
-    missing = df.isna().mean() * 100
-    st.bar_chart(missing)
-
-    st.subheader("Tipo de ausencia")
-    st.markdown("""
-    <div class="analysis-box">
-    En este contexto, la mayoría de las ausencias parecen ser de tipo **MAR (Missing At Random)**, 
-    pues dependen de condiciones meteorológicas y fallas en los sensores.
-    </div>
-    """, unsafe_allow_html=True)
+    # Tipo de ausencia (simple)
+    st.markdown("**Tipo de Ausencia:** Se asume MCAR (Missing Completely At Random).")
 
     # Imputación
-    imp = SimpleImputer(strategy="mean")
-    df_imputed = df.copy()
-    df_imputed[["PM2.5", "PM10", "TEMP", "PRES", "DEWP", "HUMI", "WSPM"]] = imp.fit_transform(
-        df_imputed[["PM2.5", "PM10", "TEMP", "PRES", "DEWP", "HUMI", "WSPM"]]
+    imputer = SimpleImputer(strategy="mean")
+    df_imputado = df.copy()
+    df_imputado[["PM2.5", "DEWP", "TEMP", "PRES", "Iws", "Is", "Ir"]] = imputer.fit_transform(
+        df[["PM2.5", "DEWP", "TEMP", "PRES", "Iws", "Is", "Ir"]]
     )
 
-    st.subheader("Después de imputar")
-    missing_after = df_imputed.isna().mean() * 100
-    st.bar_chart(missing_after)
+    st.write("**Después de Imputación:**")
+    faltantes_final = df_imputado.isna().mean() * 100
+    st.bar_chart(faltantes_final)
 
-# --- Análisis Bivariado ---
-with tabs[6]:
-    st.header("📉 Análisis Bivariado")
-    cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    x_var = st.selectbox("Selecciona variable X:", cols, index=0)
-    y_var = st.selectbox("Selecciona variable Y:", cols, index=1)
+# ==============================
+# ANÁLISIS BIVARIADO
+# ==============================
+with tabs[5]:
+    st.subheader("🔀 Análisis Bivariado")
 
-    fig, ax = plt.subplots(figsize=(7,4))
-    sns.scatterplot(x=df[x_var], y=df[y_var], ax=ax, color="violet")
+    fig, ax = plt.subplots()
+    sns.scatterplot(data=df, x=var1, y=var2, alpha=0.5, color="orange")
+    ax.set_title(f"Relación entre {var1} y {var2}", color="white")
     st.pyplot(fig)
 
-# --- Conclusiones ---
-with tabs[7]:
-    st.header("🧠 Conclusiones")
+# ==============================
+# CONCLUSIONES
+# ==============================
+with tabs[6]:
+    st.subheader("📝 Conclusiones")
+
     st.markdown("""
-    <div class="analysis-box">
-    - La calidad del aire muestra patrones estacionales marcados.  
-    - Las variables meteorológicas influyen directamente sobre la concentración de contaminantes.  
-    - El manejo adecuado de datos faltantes es esencial para evitar sesgos.  
-    - Este análisis puede ampliarse incorporando variables socioeconómicas o fuentes industriales.  
-    </div>
-    """, unsafe_allow_html=True)
+    - El PM2.5 presenta una tendencia estacional con mayores valores en invierno.  
+    - Las variables meteorológicas (TEMP, PRES, DEWP) influyen en la dispersión del material particulado.  
+    - La imputación redujo los valores faltantes sin alterar la estructura general de las distribuciones.  
+    - Las correlaciones confirman la relación entre condiciones climáticas y contaminación atmosférica.  
+    """)
+
+
 
 
