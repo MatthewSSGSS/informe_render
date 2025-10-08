@@ -198,7 +198,9 @@ def show_missing():
     miss_before = miss_before[miss_before > 0].sort_values(ascending=False)
     if not miss_before.empty:
         st.dataframe(miss_before.to_frame("n_missing"))
-        fig = px.bar(miss_before.reset_index().rename(columns={'index':'variable','n_missing':'missing'}), x='variable', y='n_missing', title="Faltantes antes")
+        # CORRECCIÓN: Cambiar 'n_missing' por 'missing' en el parámetro y
+        fig = px.bar(miss_before.reset_index().rename(columns={'index':'variable','n_missing':'missing'}), 
+                     x='variable', y='missing', title="Faltantes antes")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.success("No hay faltantes en el dataset original.")
@@ -217,7 +219,9 @@ def show_missing():
     miss_after = miss_after[miss_after > 0].sort_values(ascending=False)
     if not miss_after.empty:
         st.dataframe(miss_after.to_frame("n_missing"))
-        fig2 = px.bar(miss_after.reset_index().rename(columns={'index':'variable','n_missing':'missing'}), x='variable', y='n_missing', title="Faltantes después")
+        # CORRECCIÓN: Cambiar 'n_missing' por 'missing' en el parámetro y
+        fig2 = px.bar(miss_after.reset_index().rename(columns={'index':'variable','n_missing':'missing'}), 
+                      x='variable', y='missing', title="Faltantes después")
         st.plotly_chart(fig2, use_container_width=True)
     else:
         st.success("No quedan faltantes tras la imputación seleccionada.")
