@@ -20,6 +20,7 @@ st.markdown("""
     }
     div[data-testid="stMarkdownContainer"] {
         background-color: rgba(0,0,0,0);
+        color: black;  /* Texto negro para mejor contraste */
     }
     section.main > div {
         background-color: transparent;
@@ -66,6 +67,14 @@ def generar_datos():
 df = generar_datos()
 
 # ==============================
+# ✨ IMPUTACIÓN DE FALTANTES
+# ==============================
+df = df.set_index("fecha")  # facilitar interpolación temporal
+df = df.interpolate(method="linear")  # interpolación
+df = df.ffill().bfill()  # relleno de seguridad
+df = df.reset_index()  # restaurar índice original
+
+# ==============================
 # SIDEBAR
 # ==============================
 st.sidebar.header("Opciones de Análisis")
@@ -91,13 +100,11 @@ tabs = st.tabs([
 with tabs[0]:
     st.subheader("📊 Resumen Ejecutivo")
 
-    # Métricas
     col1, col2, col3 = st.columns(3)
     col1.metric("Promedio PM2.5", f"{df['PM2.5'].mean():.2f} µg/m³")
     col2.metric("Promedio PM10", f"{df['PM10'].mean():.2f} µg/m³")
     col3.metric("Promedio NO2", f"{df['NO2'].mean():.2f} µg/m³")
 
-    # Gráfica resumen mensual
     df_mes = df.groupby(df['fecha'].dt.to_period("M")).mean(numeric_only=True)
     df_mes.index = df_mes.index.to_timestamp()
 
@@ -193,8 +200,8 @@ with tabs[5]:
 
     st.markdown(f"""
     **Análisis:**  
-    Se observa un pequeño porcentaje de datos faltantes en las series de contaminantes, lo cual puede deberse a fallos en sensores o condiciones extremas.  
-    Este nivel de faltantes es manejable con técnicas de imputación simples.
+    Antes de imputar, existía un pequeño porcentaje de datos faltantes en las series de contaminantes.  
+    Estos fueron tratados con **interpolación lineal y relleno temporal**, asegurando continuidad en las series sin afectar la estacionalidad.
     """)
 
 # ==============================
@@ -207,7 +214,7 @@ with tabs[6]:
     - Los contaminantes presentan **patrones estacionales claros**, con concentraciones más altas en invierno.  
     - Existe una **correlación fuerte entre PM2.5 y PM10**, lo que indica que ambos responden a fuentes similares.  
     - Las variables meteorológicas como la **temperatura y humedad** influyen significativamente en la dispersión.  
-    - El **porcentaje de datos faltantes** es bajo y no representa un problema crítico.  
+    - El **porcentaje de datos faltantes** fue imputado con métodos adecuados, preservando tendencias.  
     - Este análisis permite priorizar medidas preventivas en temporadas de mayor concentración de contaminantes.
     """)
 
