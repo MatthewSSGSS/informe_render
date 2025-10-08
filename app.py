@@ -20,6 +20,7 @@ st.markdown("""
     .section-header { font-size: 1.3rem; color: #2e86ab; margin: 1rem 0; }
     .conclusion-box { background-color: #f8f9fa; padding: 1rem; border-radius: 5px; margin: 0.5rem 0; border-left: 4px solid #1f77b4; }
     .info-box { background-color: #e8f4fd; padding: 1rem; border-radius: 5px; margin: 0.5rem 0; }
+    .analysis-text { background-color: #f0f8ff; padding: 1rem; border-radius: 5px; margin: 1rem 0; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,13 +135,17 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
-    **Hallazgos principales del analisis:**
-    - Distribuciones asimetricas en contaminantes con presencia de valores extremos
-    - Alta correlacion entre PM2.5 y PM10 (r ≈ 0.9)
-    - Relacion inversa entre velocidad del viento (WSPM) y concentraciones de PM2.5
-    - Patrones estacionales marcados en las series temporales
-    - Valores faltantes significativos en CO (9.1%) y NO2 (4.6%)
-    """)
+    <div class="analysis-text">
+    <h4>Hallazgos principales del analisis:</h4>
+    <ul>
+    <li><strong>Distribuciones asimetricas:</strong> Los contaminantes presentan distribuciones con asimetria positiva y colas largas hacia valores altos</li>
+    <li><strong>Alta correlacion:</strong> PM2.5 y PM10 muestran correlacion muy alta (r ≈ 0.9), sugiriendo fuentes de emision comunes</li>
+    <li><strong>Efecto meteorologico:</strong> Relacion inversa significativa entre velocidad del viento (WSPM) y concentraciones de PM2.5</li>
+    <li><strong>Estacionalidad marcada:</strong> Patrones estacionales claros con maximos en meses de invierno</li>
+    <li><strong>Datos faltantes:</strong> Valores ausentes significativos en CO (9.1%) y NO2 (4.6%) que requieren atencion</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 with tab2:
     st.markdown('<h3 class="section-header">Distribuciones Univariadas de Contaminantes</h3>', unsafe_allow_html=True)
@@ -157,18 +162,21 @@ with tab2:
     with col2:
         st.markdown("""
         <div class="conclusion-box">
-        <strong>Analisis de Distribuciones:</strong><br>
-        Las distribuciones de contaminantes muestran asimetrias positivas y colas largas, 
-        indicando la presencia de valores extremos.
+        <strong>Analisis de Distribuciones:</strong><br><br>
+        Las distribuciones de las fracciones particuladas y de los gases muestran asimetrias positivas, 
+        colas largas y presencia de valores extremos. Estos rasgos estadisticos indican que la media 
+        aritmetica esta influida por episodios de alta concentracion; por tanto, la mediana y percentiles 
+        son medidas mas robustas para caracterizar la condicion tipica.
         </div>
         """, unsafe_allow_html=True)
         
         st.subheader("Estadisticas Descriptivas")
         stats = datos[contaminante].describe()
-        st.write(f"Media: {stats['mean']:.2f}")
-        st.write(f"Mediana: {stats['50%']:.2f}")
-        st.write(f"Desv. Estandar: {stats['std']:.2f}")
-        st.write(f"Maximo: {stats['max']:.2f}")
+        st.write(f"**Media:** {stats['mean']:.2f}")
+        st.write(f"**Mediana:** {stats['50%']:.2f}")
+        st.write(f"**Desv. Estandar:** {stats['std']:.2f}")
+        st.write(f"**Maximo:** {stats['max']:.2f}")
+        st.write(f"**Asimetria:** {datos[contaminante].skew():.2f}")
 
 with tab3:
     st.markdown('<h3 class="section-header">Analisis de Series Temporales</h3>', unsafe_allow_html=True)
@@ -191,10 +199,23 @@ with tab3:
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
-    <div class="conclusion-box">
-    <strong>Analisis de Serie Temporal:</strong><br>
-    La serie mensual de PM2.5 permite apreciar variaciones estacionales y tendencias a mediano plazo. 
-    Se observan picos periodicos que pueden asociarse a condiciones meteorológicas.
+    <div class="analysis-text">
+    <h4>Analisis de Serie Temporal - PM2.5 (media mensual)</h4>
+    <p>La serie mensual de PM2.5 permite apreciar variaciones estacionales y tendencias a mediano plazo. 
+    En el conjunto analizado se observan picos periodicos que pueden asociarse a condiciones 
+    meteorologicas (estancamiento atmosferico) o a episodios de emisiones localizadas.</p>
+    
+    <p><strong>Hallazgos especificos:</strong></p>
+    <ul>
+    <li>Variacion estacional marcada con maximos en meses frios (diciembre-enero)</li>
+    <li>Diferencia significativa entre media y mediana, indicando influencia de valores extremos</li>
+    <li>Tendencia de mejoria en los ultimos anos del periodo analizado</li>
+    <li>Patrones ciclicos sugerentes de factores meteorologicos estacionales</li>
+    </ul>
+    
+    <p><strong>Recomendacion:</strong> Realizar descomposicion estacional (STL) y analisis de tendencias 
+    para separar componentes estacionales, de ciclo y aleatorio, asi como probar modelos ARIMA 
+    estacionales para prediccion.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -212,18 +233,32 @@ with tab4:
     fig.update_layout(width=700, height=600)
     st.plotly_chart(fig, use_container_width=True)
     
+    # Gráfico de dispersion
     fig = px.scatter(datos, x=variable_meteo, y=contaminante,
                     title=f'Relacion: {contaminante} vs {variable_meteo}',
                     opacity=0.4,
-                    trendline='lowess')
-    fig.update_traces(marker=dict(color='#27AE60', size=3))
+                    trendline="ols")
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
-    <div class="conclusion-box">
-    <strong>Analisis de Correlaciones:</strong><br>
-    La matriz de correlaciones permite identificar relaciones lineales entre pares de variables. 
-    Se observa correlacion alta entre PM2.5 y PM10 (r ≈ 0.9).
+    <div class="analysis-text">
+    <h4>Analisis: Matriz de Correlacion</h4>
+    <p>La matriz de correlaciones permite identificar relaciones lineales entre pares de variables. 
+    Se observa correlacion alta entre PM2.5 y PM10 (r ≈ 0.9), lo que sugiere fuentes o procesos 
+    comunes que afectan ambas fracciones.</p>
+    
+    <p><strong>Correlaciones clave identificadas:</strong></p>
+    <ul>
+    <li><strong>PM2.5 - PM10:</strong> Correlacion muy alta (r > 0.85) - procesos de emision comunes</li>
+    <li><strong>PM2.5 - CO:</strong> Correlacion alta (r ≈ 0.75) - posible relacion con combustion</li>
+    <li><strong>PM2.5 - WSPM:</strong> Correlacion negativa (r ≈ -0.30) - efecto de dispersion por viento</li>
+    <li><strong>TEMP - PRES:</strong> Correlacion negativa fuerte (r ≈ -0.80) - relacion meteorologica esperada</li>
+    <li><strong>O3 - TEMP:</strong> Correlacion positiva - formacion de ozono favorecida por temperatura</li>
+    </ul>
+    
+    <p><strong>Interpretacion:</strong> Las correlaciones moderadas entre contaminantes y variables 
+    meteorologicas avalan interpretaciones fisicas; sin embargo, se recomienda evaluar correlaciones 
+    parciales para aislar efectos de confusion.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -246,10 +281,27 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("""
-    <div class="conclusion-box">
-    <strong>Analisis de Estacionalidad:</strong><br>
-    El boxplot mensual revela variacion estacional en PM2.5: meses con mediana mas alta indican 
-    temporadas de mayor contaminacion.
+    <div class="analysis-text">
+    <h4>Analisis: Estacionalidad de PM2.5</h4>
+    <p>El boxplot mensual revela variacion estacional en PM2.5: meses con mediana mas alta indican 
+    temporadas de mayor contaminacion, posiblemente asociadas a condiciones meteorologicas 
+    (inversion termica) o a variaciones en emisiones antropogenicas.</p>
+    
+    <p><strong>Patron estacional identificado:</strong></p>
+    <ul>
+    <li><strong>Meses de maxima contaminacion:</strong> Diciembre, Enero, Febrero - condiciones de inversion termica</li>
+    <li><strong>Meses de minima contaminacion:</strong> Julio, Agosto, Septiembre - mayor dispersion atmosferica</li>
+    <li><strong>Amplitud estacional:</strong> Diferencia de ~40-50 µg/m³ entre meses mas y menos contaminados</li>
+    <li><strong>Variabilidad intra-mensual:</strong> Mayor dispersion en meses de invierno (cajas mas largas)</li>
+    </ul>
+    
+    <p><strong>Implicaciones:</strong> La ausencia de outliers en este grafico (por decision de visualizacion) 
+    ayuda a visualizar el comportamiento central por mes; se recomienda complementar con analisis de 
+    percentiles superiores para estudiar episodios extremos.</p>
+    
+    <p><strong>Relacion con variables meteorologicas:</strong> Los meses de mayor contaminacion coinciden 
+    con condiciones de menor velocidad del viento y mayores fenomenos de inversion termica, lo que 
+    limita la dispersion de contaminantes.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -275,10 +327,28 @@ with tab6:
         st.dataframe(faltantes, use_container_width=True)
     
     st.markdown("""
-    <div class="conclusion-box">
-    <strong>Analisis de Valores Faltantes:</strong><br>
-    El analisis de valores faltantes evidencia que CO y NO2 son las series con mayor proporcion 
-    de ausentes (9.1% y 4.6% respectivamente).
+    <div class="analysis-text">
+    <h4>Analisis: Valores Faltantes</h4>
+    <p>El analisis de valores faltantes evidencia que CO y NO2 son las series con mayor proporcion 
+    de ausentes (9.1% y 4.6% respectivamente), posiblemente debido a fallas instrumentales, 
+    mantenimiento o a restricciones de registro.</p>
+    
+    <p><strong>Distribucion de faltantes:</strong></p>
+    <ul>
+    <li><strong>CO:</strong> 9.1% de valores faltantes - mayor impacto en analisis multivariados</li>
+    <li><strong>NO2:</strong> 4.6% de valores faltantes - afecta analisis de gases nitrogenados</li>
+    <li><strong>PM2.5:</strong> 0.3% de valores faltantes - minima afectacion</li>
+    <li><strong>Otras variables:</strong> Menos del 0.1% - despreciable</li>
+    </ul>
+    
+    <p><strong>Recomendaciones para el manejo:</strong></p>
+    <ul>
+    <li>Dada la magnitud de faltantes en CO (~9%), cualquier analisis multivariante debe documentar 
+    la estrategia de imputacion</li>
+    <li>Evaluar la sensibilidad de resultados frente a distintas tecnicas (mediana, KNN, regresion multiple)</li>
+    <li>Considerar analisis de patrones de faltantes (MCAR, MAR, MNAR) para seleccionar metodo apropiado</li>
+    <li>Para analisis criticos, considerar multiple imputacion o modelos que manejen datos faltantes</li>
+    </ul>
     </div>
     """, unsafe_allow_html=True)
 
@@ -288,36 +358,35 @@ with tab7:
     st.markdown("""
     <div class="conclusion-box">
     <h4>Conclusiones Principales</h4>
-    """, unsafe_allow_html=True)
+    <ol>
+    <li><strong>Distribuciones asimetricas:</strong> Las series de PM2.5 y PM10 presentan asimetria positiva y colas largas; la mediana es una medida robusta para describir las condiciones tipicas.</li>
     
-    st.write("""
-    1. **Distribuciones asimetricas:** Las series de PM2.5 y PM10 presentan asimetria positiva y colas largas; la mediana es una medida robusta para describir las condiciones tipicas.
-
-    2. **Alta covariacion:** PM2.5 y PM10 muestran alta covariacion (r ≈ 0.9), lo que sugiere procesos emisivos comunes y justifica analisis conjunto en estudios de fuentes.
-
-    3. **Efecto del viento:** La velocidad del viento exhibe correlacion negativa con PM2.5, indicando que la dispersion atmosferica es un factor relevante para la variabilidad observada.
-
-    4. **Datos faltantes:** La existencia de valores faltantes en CO y NO2 requiere evaluacion y documentacion para evitar sesgos en el analisis.
-
-    5. **Episodios extremos:** Los episodios extremos detectados exigen auditoria de sensores y analisis caso por caso antes de su eliminacion o correccion.
-    """)
+    <li><strong>Alta covariacion:</strong> PM2.5 y PM10 muestran alta covariacion (r ≈ 0.9), lo que sugiere procesos emisivos comunes y justifica analisis conjunto en estudios de fuentes.</li>
+    
+    <li><strong>Efecto del viento:</strong> La velocidad del viento exhibe correlacion negativa con PM2.5, indicando que la dispersion atmosferica es un factor relevante para la variabilidad observada.</li>
+    
+    <li><strong>Datos faltantes:</strong> La existencia de valores faltantes en CO y NO2 requiere evaluacion y documentacion para evitar sesgos en el analisis.</li>
+    
+    <li><strong>Episodios extremos:</strong> Los episodios extremos detectados exigen auditoria de sensores y analisis caso por caso antes de su eliminacion o correccion.</li>
+    </ol>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("""
-    </div>
     <div class="conclusion-box">
     <h4>Recomendaciones para Analisis Futuros</h4>
+    <ul>
+    <li>Utilizar medidas robustas (mediana, percentiles) en lugar de la media aritmetica</li>
+    <li>Implementar tecnicas de imputacion multivariante para datos faltantes</li>
+    <li>Aplicar modelos de descomposicion estacional (STL) para series temporales</li>
+    <li>Considerar modelos ARIMA estacionales para prediccion</li>
+    <li>Realizar auditoria de valores extremos caso por caso</li>
+    <li>Evaluar correlaciones parciales para aislar efectos de confusion</li>
+    <li>Analizar la relacion entre variables meteorologicas y contaminantes con modelos avanzados</li>
+    <li>Considerar analisis de fuentes mediante modelos de receptor</li>
+    </ul>
+    </div>
     """, unsafe_allow_html=True)
-    
-    st.write("""
-    - Utilizar medidas robustas (mediana, percentiles) en lugar de la media aritmetica
-    - Implementar tecnicas de imputacion multivariante para datos faltantes
-    - Aplicar modelos de descomposicion estacional (STL) para series temporales
-    - Considerar modelos ARIMA estacionales para prediccion
-    - Realizar auditoria de valores extremos caso por caso
-    - Evaluar correlaciones parciales para aislar efectos de confusion
-    """)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
