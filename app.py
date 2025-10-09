@@ -83,20 +83,70 @@ tab_choice = st.sidebar.selectbox("Ir a sección", [
 # 3. Es más apropiado que mean/median para datos secuenciales
 
 def impute_dataframe(df_in):
-    """Aplica imputación automática usando interpolación temporal"""
+    """Aplica imputación inteligente según el tipo de variable"""
     df_out = df_in.copy()
-    numcols = df_out.select_dtypes(include=[np.number]).columns.tolist()
     
-    if 'datetime' in df_out.columns and df_out['datetime'].notna().any():
-        df_out = df_out.sort_values('datetime')
-        df_out = df_out.set_index('datetime')
-        df_out[numcols] = df_out[numcols].interpolate(method='time', limit_direction='both')
-        df_out = df_out.reset_index()
-        # Fill any remaining missing values
-        df_out[numcols] = df_out[numcols].ffill().bfill()
-    else:
-        # Fallback: interpolación lineal si no hay datetime
-        df_out[numcols] = df_out[numcols].interpolate().ffill().bfill()
+    if 'datetime' not in df_out.columns or df_out['datetime'].isna().all():
+        st.warning("No hay columna datetime válida, usando métodos básicos")
+        return impute_fallback(df_out)
+    
+    df_out = df_out.sort_values('datetime').set_index('datetime')
+    
+    # ESTRATEGIAS ESPECÍFICAS POR TIPO DE VARIABLE
+    if 'pm2_5' in df_out.columns:
+        df_out['pm2_5'] = df_out['pm2_5'].interpolate(method='time').ffill().bfill()
+    
+    if 'pm10' in df_out.columns:
+        df_out['pm10'] = df_out['pm10'].interpolate(method='time').ffill().bfill()
+    
+    # Para gases (SO2, NO2, CO, O3) - interpolación temporal
+    gases = ['so2', 'no2', 'co', 'o3']
+    for gas in gases:
+        if gas in df_out.columns:
+            df_out[gas] = df_out[gas].interpolate(method='time').ffill().bfill()
+    
+    # Variables meteorológicas - estrategias específicas
+    if 'temp' in df_out.columns:
+        df_out['temp'] = df_out['temp'].interpolate(method='time')  # Temperatura tiene ciclos diarios
+    
+    if 'pres' in df_out.columns:
+        df_out['pres'] = df_out['pres'].interpolate(method='time')  # Presión atmosférica
+    
+    if 'dewp' in df_out.columns:
+        df_out['dewp'] = df_out['dewp'].interpolate(method='time')  # Punto de rocío
+    
+    if 'wspm' in df_out.columns:
+        df_out['wspm'] = df_out['wspm'].fillna(0)  # Velocidad viento - 0 si no hay dato
+    
+    if 'wd' in df_out.columns:
+        df_out['wd'] = df_out['wd'].ffill().bfill()  # Dirección viento - forward/backward fill
+    
+    if 'rain' in df_out.columns:
+        df_out['rain'] = df_out['rain'].fillna(0)  # Lluvia - 0 si no hay dato (asumir no llueve)
+    
+    # Para cualquier otra variable numérica no cubierta
+    remaining_numeric = df_out.select_dtypes(include=[np.number]).columns.difference(
+        ['pm2_5', 'pm10', 'so2', 'no2', 'co', 'o3', 'temp', 'pres', 'dewp', 'wspm', 'rain']
+    )
+    for col in remaining_numeric:
+        df_out[col] = df_out[col].interpolate(method='time').ffill().bfill()
+    
+    df_out = df_out.reset_index()
+    return df_out
+
+def impute_fallback(df_out):
+    """Fallback cuando no hay datetime"""
+    numeric_cols = df_out.select_dtypes(include=[np.number]).columns
+    
+    # Estrategias básicas sin información temporal
+    for col in numeric_cols:
+        if col in ['rain', 'wspm']:
+            df_out[col] = df_out[col].fillna(0)  # Lluvia y viento = 0 si falta
+        elif col == 'wd':
+            df_out[col] = df_out[col].ffill().bfill()  # Dirección viento
+        else:
+            # Para contaminantes y otras variables, usar mediana
+            df_out[col] = df_out[col].fillna(df_out[col].median())
     
     return df_out
 
@@ -293,22 +343,22 @@ elif tab_choice == "Bivariado":
 elif tab_choice == "Conclusiones":
     st.header("Conclusiones")
     st.markdown("""
-    ### Método de Imputación Seleccionado
-    
-    **Interpolación Temporal** fue el método elegido porque:
-    
-    - 📊 **Los datos son series temporales** con mediciones consecutivas
-    - ⏱️ **Preserva la estructura temporal** y patrones estacionales
-    - 🔄 **Mantiene la autocorrelación** entre observaciones adyacentes
-    - 📈 **Es más apropiado** que métodos como media/mediana para datos secuenciales
-    
-    ### Otros Hallazgos
-    
-    - Se normalizaron nombres de columnas para evitar KeyError
-    - El análisis muestra faltantes antes/después con clasificación heurística
-    - Pruebas KS verifican que la imputación no altera significativamente las distribuciones
-    - Dashboard se adapta a las columnas realmente presentes en el dataset
-    """)
+### Estrategia de Imputación por Tipo de Variable
+
+**Contaminantes (PM2.5, PM10, SO2, NO2, CO, O3):**
+-  **Interpolación Temporal** - Preserva patrones estacionales y tendencias
+
+**Variables Meteorológicas:**
+-  **Temperatura, Presión, Punto de Rocío:** Interpolación Temporal (patrones cíclicos)
+-  **Velocidad del Viento:** Relleno con 0 (asume calma cuando no hay dato)
+-  **Lluvia:** Relleno con 0 (asume no llueve cuando no hay dato)
+-  **Dirección del Viento:** Forward/Backward Fill (persistencia direccional)
+
+**Justificación Científica:**
+- Los contaminantes muestran alta autocorrelación temporal
+- Las variables meteorológicas tienen comportamientos físicos específicos
+- Evita introducir sesgos en análisis posteriores
+""")
 # Footer
 st.markdown("---")
 
