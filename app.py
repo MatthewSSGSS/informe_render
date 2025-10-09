@@ -311,7 +311,7 @@ elif tab_choice == "Conclusiones":
     """)
 # Footer
 st.markdown("---")
-st.caption("App generada por asistente — asegúrate que el CSV esté en la raíz: PRSA_Data_Dongsi_20130301-20170228.csv")
+
 
 
 
